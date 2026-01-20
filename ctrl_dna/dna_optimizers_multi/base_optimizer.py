@@ -141,17 +141,15 @@ class BaseOptimizerMulti:
         self.fitness_ranges = {cell: get_fitness_info(cell,self.oracle_type) for cell in self.targets.keys()}
     
     def load_target_model(self, cell):
-        
+        checkpoint_dir = getattr(self.cfg, 'checkpoint_dir', './checkpoints')
+
         model_path = {
-            
-            'hepg2':f'/human/ckpt/human_regression_{self.oracle_type}_hepg2.ckpt',
-            'k562': f"/human/ckpt/human_regression_{self.oracle_type}_k562.ckpt",
-            'sknsh': f"/human/ckpt/human_regression_{self.oracle_type}_sknsh.ckpt",
-            "JURKAT":f"/human/ckpt/human_{self.oracle_type}_jurkat.ckpt",
-            "K562":f"/human/ckpt/human_{self.oracle_type}_k562.ckpt",
-            "THP1":f"/human/ckpt/human_{self.oracle_type}_THP1.ckpt",
-
-
+            'hepg2': f'{checkpoint_dir}/human_regression_{self.oracle_type}_hepg2.ckpt',
+            'k562': f'{checkpoint_dir}/human_regression_{self.oracle_type}_k562.ckpt',
+            'sknsh': f'{checkpoint_dir}/human_regression_{self.oracle_type}_sknsh.ckpt',
+            "JURKAT": f'{checkpoint_dir}/human_{self.oracle_type}_jurkat.ckpt',
+            "K562": f'{checkpoint_dir}/human_{self.oracle_type}_k562.ckpt',
+            "THP1": f'{checkpoint_dir}/human_{self.oracle_type}_THP1.ckpt',
         }
         model = src.reglm.regression.EnformerModel.load_from_checkpoint(
             model_path[cell], map_location='cuda:0'

@@ -151,7 +151,7 @@ class Lagrange_optimizer(BaseOptimizerMulti):
         motifs = [m for m in motifs if m.name.decode() in sel]
         print(f"Selected motifs: {len(motifs)}")
 
-        data_dir='./data'
+        data_dir = getattr(cfg, 'data_dir', './data')
         if cfg.task in ['hepg2','k562','sknsh']:
             self.gt_freq = pd.read_csv(f'{data_dir}/human/tfbs/{cfg.task}_tfbs_freq_all.csv')
         else:

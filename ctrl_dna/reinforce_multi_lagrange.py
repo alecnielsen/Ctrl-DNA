@@ -11,8 +11,7 @@ from dna_optimizers_multi.lagrange_optimizer import Lagrange_optimizer
 import os
 os.environ["WANDB_SILENT"] = "true"
 
-def get_meme_and_ppms_path(task):
-    tfbs_dir = '/h/chenx729/TACOSourceCode/TACO/TFBS'
+def get_meme_and_ppms_path(task, tfbs_dir):
     if task == "hepg2" or task == "k562" or task == "sknsh" or task=='JURKAT' or task=='K562' or task =='THP1':
         meme_path = f"{tfbs_dir}/20250424153556_JASPAR2024_combined_matrices_735317_meme.txt"
         ppms_path = f"{tfbs_dir}/selected_ppms.csv"
@@ -79,6 +78,14 @@ def parse_args():
     parser.add_argument('--constraint',default=[0.5,0.5,-0.5],nargs='+', type=float)
     parser.add_argument('--tfbs',default=False,type = bool)
     parser.add_argument('--lambda_upper',default=1.0,type = float)
+
+    # Path configuration (override hardcoded paths)
+    parser.add_argument('--tfbs_dir', type=str, default='./data/TFBS',
+                        help='Directory containing TFBS files (meme, ppms)')
+    parser.add_argument('--data_dir', type=str, default='./data',
+                        help='Directory containing MPRA data files')
+    parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints',
+                        help='Directory containing oracle model checkpoints')
     args = parser.parse_args()
     
     return args
@@ -109,14 +116,13 @@ def main():
 
     print(f"Optimizer Arguments: {optimizer_args}")
     optimizer_args.meme_path, optimizer_args.ppms_path = \
-        get_meme_and_ppms_path(optimizer_args.task)
-    
-    
+        get_meme_and_ppms_path(optimizer_args.task, optimizer_args.tfbs_dir)
+
+
     optimizer=Lagrange_optimizer(optimizer_args)
-    
-    
-    data_dir='/scratch/ssd004/scratch/chenx729/GRPO/'
-    init_data_path = f'{data_dir}/data/human/{optimizer_args.task}_{optimizer_args.level}.csv'
+
+
+    data_dir = optimizer_args.data_dir
 
     if optimizer_args.task in ['hepg2','k562','sknsh']:
         init_data_path = f'{data_dir}/human/{optimizer_args.task}_{optimizer_args.level}.csv'

@@ -168,13 +168,18 @@ class BaseOptimizerMulti:
             # Return zero tensor matching expected shape for consistency
             return torch.zeros(3)
 
-        scores = []
+        # Score each cell type explicitly by key (not relying on dict order)
+        # This ensures consistent ordering: index 0=first cell, 1=second, 2=third
+        scores_dict = {}
         for cell, model in self.targets.items():
-            #raw_score = model([dna]).squeeze(0).item()
-            raw_score = self.targets[cell]([dna]).squeeze(0).item()
-            #scores[cell] = self.normalize_target(raw_score, cell)
-            norm_score = self.normalize_target(raw_score, cell)
-            scores.append(norm_score)
+            raw_score = model([dna]).squeeze(0).item()
+            scores_dict[cell] = self.normalize_target(raw_score, cell)
+
+        # Build scores list in explicit order based on task type
+        if self.task in ['hepg2', 'k562', 'sknsh']:
+            scores = [scores_dict['hepg2'], scores_dict['k562'], scores_dict['sknsh']]
+        else:
+            scores = [scores_dict['JURKAT'], scores_dict['K562'], scores_dict['THP1']]
         
         # Default reward: single ON target (index 0) vs two OFF constraints (indices 1, 2)
         # For original cells: ON=hepg2(0), OFF=k562(1), OFF=sknsh(2)

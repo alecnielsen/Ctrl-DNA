@@ -90,14 +90,10 @@ class Lagrange_optimizer(BaseOptimizerMulti):
 
     def _init(self, cfg):
         self.prefix_label =  cfg.prefix_label
-        
-        
-        if cfg.wandb_log:
-            wandb.init(
-                project=cfg.project_name,
-                name=cfg.wandb_run_name,
-                reinit=True,
-            )
+
+        # Note: wandb.init() is already called in BaseOptimizerMulti.__init__
+        # No need to call it again here
+
         self.agent = src.reglm.lightning.LightningModel(label_len = len(cfg.prefix_label))
         self.label = cfg.prefix_label
         self.agent.to(self.device)
@@ -139,29 +135,39 @@ class Lagrange_optimizer(BaseOptimizerMulti):
         }
         self.task_idx=self.task_reward_map.get(cfg.task, 0)
 
-        motifs, bg = scripts.motifs.read_meme(
-            cfg.meme_path
-        )
-        print(f"Total motifs: {len(motifs)}")
-        sel = scripts.utils.load_csv(
-            cfg.ppms_path
-        ).Matrix_id.tolist()
-        self.motif2idx = {name: i for i, name in enumerate(sel)}
-        self.idx2motif = {i: name for i, name in enumerate(sel)}
-
-        motifs = [m for m in motifs if m.name.decode() in sel]
-        print(f"Selected motifs: {len(motifs)}")
-
-        data_dir = getattr(cfg, 'data_dir', './data')
-        if cfg.task in ['hepg2','k562','sknsh']:
-            self.gt_freq = pd.read_csv(f'{data_dir}/human/tfbs/{cfg.task}_tfbs_freq_all.csv')
-        else:
-            self.gt_freq = pd.read_csv(f'{data_dir}/human_promoters/tfbs/{cfg.task}_tfbs_freq_all.csv')
-        self.motifs = motifs
-        self.bg = bg
+        # Only load TFBS-related files if TFBS optimization is enabled
         self.tfbs_ratio=cfg.tfbs_ratio
         self.tfbs_upper=cfg.tfbs_upper
         self.lambda_upper =cfg.lambda_upper
+
+        if getattr(cfg, 'tfbs', False):
+            motifs, bg = scripts.motifs.read_meme(
+                cfg.meme_path
+            )
+            print(f"Total motifs: {len(motifs)}")
+            sel = scripts.utils.load_csv(
+                cfg.ppms_path
+            ).Matrix_id.tolist()
+            self.motif2idx = {name: i for i, name in enumerate(sel)}
+            self.idx2motif = {i: name for i, name in enumerate(sel)}
+
+            motifs = [m for m in motifs if m.name.decode() in sel]
+            print(f"Selected motifs: {len(motifs)}")
+
+            data_dir = getattr(cfg, 'data_dir', './data')
+            if cfg.task in ['hepg2','k562','sknsh']:
+                self.gt_freq = pd.read_csv(f'{data_dir}/human/tfbs/{cfg.task}_tfbs_freq_all.csv')
+            else:
+                self.gt_freq = pd.read_csv(f'{data_dir}/human_promoters/tfbs/{cfg.task}_tfbs_freq_all.csv')
+            self.motifs = motifs
+            self.bg = bg
+        else:
+            # Initialize empty/None values when TFBS is disabled
+            self.motifs = []
+            self.bg = None
+            self.gt_freq = None
+            self.motif2idx = {}
+            self.idx2motif = {}
 
     def compute_combined_score(self, scores_multi, cfg):
         """
@@ -213,8 +219,9 @@ class Lagrange_optimizer(BaseOptimizerMulti):
         freq_df = freq_df.reindex(columns=all_columns, fill_value=0)
         gt_freq = self.gt_freq.reindex(columns=all_columns, fill_value=0)
 
-        freq_df.drop(columns=['SeqID'], inplace=True)
-        gt_freq.drop(columns=['SeqID'], inplace=True)
+        # Drop 'SeqID' column if present (use errors='ignore' for robustness)
+        freq_df.drop(columns=['SeqID'], inplace=True, errors='ignore')
+        gt_freq.drop(columns=['SeqID'], inplace=True, errors='ignore')
         
         correlations = torch.zeros(len(dna_list)).to(self.device)
         gt_vec=np.array(gt_freq.sum(0))
@@ -252,7 +259,7 @@ class Lagrange_optimizer(BaseOptimizerMulti):
         for i in range(3): self.lagrangian_multipliers[i].data.clamp_( min=0 )
 
         
-        lambdas = np.array([lag.detach().numpy() for lag in self.lagrangian_multipliers])
+        lambdas = np.array([lag.detach().cpu().numpy() for lag in self.lagrangian_multipliers])
         
         # To force the normalized value without affecting the gradient, we exploit the 'clamp' function from torch
         for i in range(2): self.lagrangian_multipliers[i].data.clamp_( min=lambdas[i], max=self.lambda_upper)

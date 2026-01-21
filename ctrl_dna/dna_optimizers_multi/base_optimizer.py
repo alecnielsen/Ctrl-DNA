@@ -2,10 +2,19 @@ import os
 #import tdc
 import itertools
 import time
-import yaml
-import wandb
 import torch
 import numpy as np
+
+# Optional imports - only needed if wandb_log=True
+try:
+    import yaml
+except ImportError:
+    yaml = None
+
+try:
+    import wandb
+except ImportError:
+    wandb = None
 
 import src.reglm.dataset, src.reglm.lightning, src.reglm.utils, src.reglm.metrics
 from .experience import Experience

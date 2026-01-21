@@ -1,15 +1,25 @@
 import os
 import sys
-import wandb
-import hydra
 import torch
 from torch import optim
 import numpy as np
 import pandas as pd
 
+# Optional imports - only needed if wandb_log=True
+try:
+    import wandb
+except ImportError:
+    wandb = None
+
+# hydra not actually used in this file, but imported for compatibility
+try:
+    import hydra
+except ImportError:
+    hydra = None
+
 import src.reglm.regression
 
-from .base_optimizer import BaseOptimizer, evaluate,BaseOptimizerMulti
+from .base_optimizer import evaluate, BaseOptimizerMulti
 import src.reglm.dataset, src.reglm.lightning, src.reglm.utils, src.reglm.metrics
 import random
 from copy import deepcopy

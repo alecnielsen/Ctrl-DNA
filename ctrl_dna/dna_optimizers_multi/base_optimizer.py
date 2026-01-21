@@ -50,15 +50,15 @@ def get_fitness_info(cell,oracle_type='paired'):
         elif cell == 'JURKAT':
             length = 250
             min_fitness = -5.574782
-            max_fitness =8.555965
+            max_fitness = 8.413577
         elif cell == 'K562':
             length = 250
             min_fitness = -4.088671
-            max_fitness = 10.781755
+            max_fitness = 8.555965
         elif cell == 'THP1':
             length = 250
             min_fitness = -7.271035
-            max_fitness = 6.797082
+            max_fitness = 12.485513
         else:
             raise NotImplementedError()
 
@@ -119,6 +119,7 @@ class BaseOptimizerMulti:
             wandb.init(
                 project=cfg.project_name,
                 name=cfg.wandb_run_name,
+                reinit=True,
             )
         
         self.device = torch.device(cfg.device)
@@ -152,7 +153,7 @@ class BaseOptimizerMulti:
             "THP1": f'{checkpoint_dir}/human_{self.oracle_type}_THP1.ckpt',
         }
         model = src.reglm.regression.EnformerModel.load_from_checkpoint(
-            model_path[cell], map_location='cuda:0'
+            model_path[cell], map_location=self.device
         ).to(self.device)
         model.eval()
         return model
@@ -164,8 +165,9 @@ class BaseOptimizerMulti:
     @torch.no_grad()
     def score_enformer(self, dna):
         if len(self.dna_buffer) > self.max_oracle_calls:
-            return 0
-        
+            # Return zero tensor matching expected shape for consistency
+            return torch.zeros(3)
+
         scores = []
         for cell, model in self.targets.items():
             #raw_score = model([dna]).squeeze(0).item()
@@ -174,13 +176,14 @@ class BaseOptimizerMulti:
             norm_score = self.normalize_target(raw_score, cell)
             scores.append(norm_score)
         
-        # Compute reward as hepg2 - k562 - sknsh
-        #print('multi score is :++++++++++++++++',scores)
-        # TODO -- Hypervolume Uncertainty Region
+        # Default reward: single ON target (index 0) vs two OFF constraints (indices 1, 2)
+        # For original cells: ON=hepg2(0), OFF=k562(1), OFF=sknsh(2)
+        # For immune cells (single-ON mode): ON=JURKAT(0), OFF=K562(1), OFF=THP1(2)
+        # Note: DualOnOptimizer overrides this for dual-ON (JURKAT+THP1 vs K562)
         reward = 0.8*scores[0] - 0.1*scores[1] - 0.1*scores[2]
         
         if dna in self.dna_buffer:
-            self.dna_buffer[dna][2] += 1
+            self.dna_buffer[dna][3] += 1  # Increment count (index 3), not order (index 2)
             self.redundant_count += 1
         else:
             #self.dna_buffer[dna] = [float(reward), len(self.dna_buffer) + 1, 1]

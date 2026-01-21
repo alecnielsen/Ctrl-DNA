@@ -96,6 +96,7 @@ class Lagrange_optimizer(BaseOptimizerMulti):
             wandb.init(
                 project=cfg.project_name,
                 name=cfg.wandb_run_name,
+                reinit=True,
             )
         self.agent = src.reglm.lightning.LightningModel(label_len = len(cfg.prefix_label))
         self.label = cfg.prefix_label
@@ -161,7 +162,25 @@ class Lagrange_optimizer(BaseOptimizerMulti):
         self.tfbs_ratio=cfg.tfbs_ratio
         self.tfbs_upper=cfg.tfbs_upper
         self.lambda_upper =cfg.lambda_upper
-        
+
+    def compute_combined_score(self, scores_multi, cfg):
+        """
+        Compute combined score from multi-objective scores.
+        Override in subclasses for custom reward structures (e.g., dual-ON).
+
+        Default behavior: single ON target, multiple OFF constraints.
+        score = task - (constraint1 - c1) - (constraint2 - c2)
+        """
+        task_idx = self.task_reward_map.get(cfg.task, 0)
+        constraint_indices = [i for i in range(scores_multi.shape[1]) if i != task_idx]
+
+        scores = (
+            scores_multi[:, task_idx]
+            - (scores_multi[:, constraint_indices[0]] - self.constraint[0])
+            - (scores_multi[:, constraint_indices[1]] - self.constraint[1])
+        )
+        return scores
+
     def update_lambda( self, avg_epcost ):
 
         for id, epcost in enumerate(avg_epcost):
@@ -259,7 +278,7 @@ class Lagrange_optimizer(BaseOptimizerMulti):
             total_lambda = self.lagrangian_multipliers[0] + self.lagrangian_multipliers[1]
 
         # Define a soft inverse weighting factor (so high lambda → low boost)
-        boost = max(1,2+self.tfbs_upper - total_lambda)
+        boost = torch.clamp(2 + self.tfbs_upper - total_lambda, min=1.0)
         if correlations!=None:
             advantages=boost*advantages-self.lagrangian_multipliers[0]*advantages_2-self.lagrangian_multipliers[1]*advantages_3-self.lagrangian_multipliers[2]*correlations_adv
         else:
@@ -384,14 +403,8 @@ class Lagrange_optimizer(BaseOptimizerMulti):
             #print('predicted scores: ',scores.shape)
             scores_multi = torch.tensor(scores, dtype=torch.float32, device=self.device)
 
-            # combine scores with preference
-            
-            
-            task_idx = self.task_reward_map.get(cfg.task, 0)
-            constraint_indices = [i for i in range(scores_multi.shape[1]) if i != task_idx]
-            
-            scores = scores_multi[:,task_idx]-(scores_multi[:,constraint_indices[0]]-self.constraint[0])+scores_multi[:,task_idx]-(scores_multi[:,constraint_indices[1]]-self.constraint[1])
-            
+            # combine scores with preference (overridable for custom reward structures)
+            scores = self.compute_combined_score(scores_multi, cfg)
             scores = scores.detach().cpu()
             train_steps += 1
             

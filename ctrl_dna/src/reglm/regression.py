@@ -165,17 +165,26 @@ class EnformerModel(pl.LightningModule):
         save_dir=".",
         max_epochs=10,
         weights=None,
+        use_cpu=False,
     ):
         torch.set_float32_matmul_precision("medium")
 
         # Make trainer
-        trainer = pl.Trainer(
-            max_epochs=max_epochs,
-            accelerator="gpu",
-            devices=[device],
-            logger=CSVLogger(save_dir),
-            callbacks=[ModelCheckpoint(monitor="val_loss", mode="min")],
-        )
+        if use_cpu:
+            trainer = pl.Trainer(
+                max_epochs=max_epochs,
+                accelerator="cpu",
+                logger=CSVLogger(save_dir),
+                callbacks=[ModelCheckpoint(monitor="val_loss", mode="min")],
+            )
+        else:
+            trainer = pl.Trainer(
+                max_epochs=max_epochs,
+                accelerator="gpu",
+                devices=[device],
+                logger=CSVLogger(save_dir),
+                callbacks=[ModelCheckpoint(monitor="val_loss", mode="min")],
+            )
         # Make dataloaders
         if weights is None:
             train_dl = DataLoader(

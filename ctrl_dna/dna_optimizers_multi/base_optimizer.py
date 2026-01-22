@@ -1,7 +1,11 @@
 import os
 #import tdc
 import itertools
+import json
 import time
+from functools import lru_cache
+from pathlib import Path
+
 import torch
 import numpy as np
 
@@ -42,34 +46,68 @@ def evaluate(round_df, starting_sequences):
     }
     
     
+@lru_cache(maxsize=1)
+def _load_fitness_overrides():
+    """Load optional fitness range overrides from JSON."""
+    override_path = os.getenv("CTRL_DNA_FITNESS_RANGES")
+    if override_path:
+        path = Path(override_path)
+    else:
+        try:
+            repo_root = Path(__file__).resolve().parents[3]
+        except Exception:
+            return {}
+        path = repo_root / "checkpoints" / "fitness_ranges.json"
+
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text())
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
 def get_fitness_info(cell,oracle_type='paired'):
+    overrides = _load_fitness_overrides()
+    override = overrides.get(cell)
+
     if oracle_type=='paired' or oracle_type=='dlow':
-        if cell == 'hepg2':
-            length = 200
-            min_fitness = -6.051336
-            max_fitness = 10.992575
-        elif cell == 'k562':
-            length = 200
-            min_fitness = -5.857445
-            max_fitness = 10.781755
-        elif cell == 'sknsh':
-            length = 200
-            min_fitness = -7.283977
-            max_fitness = 12.888308
-        elif cell == 'JURKAT':
-            length = 250
-            min_fitness = -5.574782
-            max_fitness = 8.413577
-        elif cell == 'K562':
-            length = 250
-            min_fitness = -4.088671
-            max_fitness = 8.555965
-        elif cell == 'THP1':
-            length = 250
-            min_fitness = -7.271035
-            max_fitness = 12.485513
+        fitness_map = {
+            'hepg2': (200, -6.051336, 10.992575),
+            'k562': (200, -5.857445, 10.781755),
+            'sknsh': (200, -7.283977, 12.888308),
+            'JURKAT': (250, -5.574782, 8.413577),
+            'K562': (250, -4.088671, 8.555965),
+            'THP1': (250, -7.271035, 12.485513),
+        }
+        if cell in fitness_map:
+            length, min_fitness, max_fitness = fitness_map[cell]
+        elif override:
+            try:
+                length = int(override.get("length", 0))
+                if length <= 0:
+                    raise ValueError("override length missing or invalid")
+                min_fitness = float(override["min"])
+                max_fitness = float(override["max"])
+                return length, min_fitness, max_fitness
+            except Exception:
+                raise NotImplementedError()
         else:
             raise NotImplementedError()
+    else:
+        raise NotImplementedError()
+
+    if override:
+        try:
+            if "min" in override:
+                min_fitness = float(override["min"])
+            if "max" in override:
+                max_fitness = float(override["max"])
+            if "length" in override:
+                length = int(override["length"])
+        except Exception:
+            pass
 
     return length, min_fitness, max_fitness
     

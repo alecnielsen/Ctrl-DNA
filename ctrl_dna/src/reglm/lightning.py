@@ -117,7 +117,13 @@ class LightningModel(pl.LightningModule):
         self.save_hyperparameters(ignore=["model"])
         self.lr = lr
 
-        ckpt_dir = 'LongSafari/hyenadna-medium-160k-seqlen-hf'
+        # Use local path if available, otherwise HuggingFace
+        import os
+        local_hyenadna = '/hyenadna_model'
+        if os.path.exists(local_hyenadna):
+            ckpt_dir = local_hyenadna
+        else:
+            ckpt_dir = 'LongSafari/hyenadna-medium-160k-seqlen-hf'
         hyenadna_path = "/blob/ICLR/hyena/hyena-dna"
         
         # Build model
